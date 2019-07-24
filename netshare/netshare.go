@@ -26,6 +26,8 @@ const (
 	DirModeFlag      = "dirMode"
 	VersionFlag      = "version"
 	OptionsFlag      = "options"
+	NFSShareFlag     = "share"
+	NFSCreateFlag    = "create"
 	BasedirFlag      = "basedir"
 	VerboseFlag      = "verbose"
 	AvailZoneFlag    = "az"
@@ -132,6 +134,8 @@ func setupFlags() {
 
 	nfsCmd.Flags().IntP(VersionFlag, "v", 4, "NFS Version to use [3 | 4]. Can also be set with NETSHARE_NFS_VERSION")
 	nfsCmd.Flags().StringP(OptionsFlag, "o", "", fmt.Sprintf("Options passed to nfs mounts (ex: %s)", drivers.DefaultNfsV3))
+	nfsCmd.Flags().StringP(NFSShareFlag, "s", "", "default NFS-Server to connect to.")
+	nfsCmd.Flags().StringP(NFSCreateFlag, "c", "", "default create directorie.")
 
 	efsCmd.Flags().String(AvailZoneFlag, "", "AWS Availability zone [default: \"\", looks up via metadata]")
 	efsCmd.Flags().String(NameServerFlag, "", "Custom DNS nameserver.  [default \"\", uses /etc/resolv.conf]")
@@ -196,9 +200,11 @@ func execNFS(cmd *cobra.Command, args []string) {
 		}
 	}
 	options, _ := cmd.Flags().GetString(OptionsFlag)
+	share, _ := cmd.Flags().GetString(NFSShareFlag)
+	create, _ := cmd.Flags().GetString(NFSCreateFlag)
 	mount := syncDockerState("nfs")
-	d := drivers.NewNFSDriver(rootForType(drivers.NFS), version, options, mount)
-	startOutput(fmt.Sprintf("NFS Version %d :: options: '%s'", version, options))
+	d := drivers.NewNFSDriver(rootForType(drivers.NFS), version, options, share, create, mount)
+	startOutput(fmt.Sprintf("NFS Version %d :: options: '%s' :: share: '%s' :: create: '%s'", version, options, share, create))
 	start(drivers.NFS, d)
 }
 

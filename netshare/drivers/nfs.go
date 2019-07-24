@@ -16,19 +16,24 @@ const (
 
 type nfsDriver struct {
 	volumeDriver
-	version int
-	nfsopts map[string]string
+	version   int
+	nfsopts   map[string]string
+	nfsserver string
+	share     string
+	create    string
 }
 
 var (
 	EmptyMap = map[string]string{}
 )
 
-func NewNFSDriver(root string, version int, nfsopts string, mounts *MountManager) nfsDriver {
+func NewNFSDriver(root string, version int, nfsopts string, share string, create string, mounts *MountManager) nfsDriver {
 	d := nfsDriver{
 		volumeDriver: newVolumeDriver(root, mounts),
 		version:      version,
 		nfsopts:      map[string]string{},
+		share:        share,
+		create:       create,
 	}
 
 	if len(nfsopts) > 0 {
@@ -45,7 +50,29 @@ func (n nfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) 
 	resolvedName, resOpts := resolveName(r.Name)
 
 	hostdir := mountpoint(n.root, resolvedName)
-	source := n.fixSource(resolvedName)
+
+	var source string
+
+	// log.Infof("n.mountm.GetOption(%s, %s): %s", resolvedName, ShareOpt, n.mountm.GetOption(resolvedName, ShareOpt))
+
+	if n.mountm.GetOption(resolvedName, ShareOpt) == "" && !n.mountm.GetOptionAsBool(resolvedName, CreateOpt) {
+
+		if n.mountm.mounts[resolvedName].opts == nil {
+			n.mountm.mounts[resolvedName].opts = make(map[string]string)
+		}
+
+		if n.share != "" {
+			n.mountm.mounts[resolvedName].opts[ShareOpt] = n.share
+			source = n.fixSource(n.share)
+		}
+
+		if n.create != "" {
+			n.mountm.mounts[resolvedName].opts[CreateOpt] = n.create
+		}
+
+	} else {
+		source = n.fixSource(resolvedName)
+	}
 
 	// Support adhoc mounts (outside of docker volume create)
 	// need to adjust source for ShareOpt
@@ -71,7 +98,6 @@ func (n nfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) 
 	}
 
 	log.Infof("Mounting NFS volume %s on %s", source, hostdir)
-
 	if err := createDest(hostdir); err != nil {
 		if n.mountm.Count(resolvedName) > 0 {
 			n.mountm.Decrement(resolvedName)
@@ -173,13 +199,13 @@ func (n nfsDriver) mountVolume(name, source, dest string, version int) error {
 		}
 		cmd = fmt.Sprintf("%s -t nfs -o %s %s %s", mountCmd, opts, source, dest)
 	default:
-		log.Debugf("Mounting with NFSv4 - src: %s, dest: %s", source, dest)
+		log.Infof("Mounting with NFSv4 - opts: %s, src: %s, dest: %s", opts, source, dest)
 		if len(opts) > 0 {
 			cmd = fmt.Sprintf("%s -t nfs4 -o %s %s %s", mountCmd, opts, source, dest)
 		} else {
 			cmd = fmt.Sprintf("%s -t nfs4 %s %s", mountCmd, source, dest)
 		}
 	}
-	log.Debugf("exec: %s\n", cmd)
+	log.Infof("exec: %s\n", cmd)
 	return run(cmd)
 }
